@@ -148,14 +148,7 @@ function dateRepr(d) {
   var out = ''
 
   sec = Math.abs(sec)
-  if (sec < 2700)  // less than 45 minutes
-    out = Math.round(sec / 60) + 'm'
-  else if (sec < 86400)  // less than 24 hours
-    out = Math.round(sec / 3600) + 'h'
-  else if (sec < 604800)  // less than a week
-    out = Math.round(sec / 86400) + 'd'
-  else
-    out = d.toLocaleDateString(undefined, {year: "numeric", month: "long", day: "numeric"})
+  out = d.toLocaleDateString(undefined, {year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric"})
 
   if (neg) return '-' + out
   return out
@@ -637,10 +630,10 @@ var vm = new Vue({
       }
     },
     resizeFeedList: function(width) {
-      this.feedListWidth = Math.min(Math.max(200, width), 700)
+      this.feedListWidth = Math.min(Math.max(250, width), 500)
     },
     resizeItemList: function(width) {
-      this.itemListWidth = Math.min(Math.max(200, width), 700)
+      this.itemListWidth = Math.min(Math.max(600, width), 900)
     },
     resetFeedChoice: function() {
       this.feedNewChoice = []
@@ -682,6 +675,17 @@ var vm = new Vue({
       this.filteredFeedStats = statsFeeds
       this.filteredFolderStats = statsFolders
       this.filteredTotalStats = statsTotal
+    },
+    setDefaultIcon: function(event) {
+      const svgString = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="orange" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-rss">
+          <path d="M4 11a9 9 0 0 1 9 9"></path>
+          <path d="M4 4a16 16 0 0 1 16 16"></path>
+          <circle cx="5" cy="19" r="1"></circle>
+        </svg>
+      `;
+      const encodedSvg = encodeURIComponent(svgString);
+      event.target.src = `data:image/svg+xml,${encodedSvg}`;
     },
   }
 })

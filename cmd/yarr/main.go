@@ -60,7 +60,7 @@ func main() {
 		fmt.Fprintln(out, " ", strings.Join(OptList, ", "))
 	}
 
-	flag.StringVar(&addr, "addr", opt("YARR_ADDR", "127.0.0.1:7070"), "address to run server on")
+	flag.StringVar(&addr, "addr", opt("YARR_ADDR", "127.0.0.1:7777"), "address to run server on")
 	flag.StringVar(&basepath, "base", opt("YARR_BASE", ""), "base path of the service url")
 	flag.StringVar(&authfile, "auth-file", opt("YARR_AUTHFILE", ""), "`path` to a file containing username:password. Takes precedence over --auth (or YARR_AUTH)")
 	flag.StringVar(&auth, "auth", opt("YARR_AUTH", ""), "string with username and password in the format `username:password`")

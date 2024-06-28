@@ -1,0 +1,15 @@
+version: '3.9'
+
+services:
+  yarr: 
+    image: yarr:latest
+    container_name: yarr
+#    hostname: yarr
+#    user: 1026:100
+    ports:
+      - "7777:7777"
+    environment:
+      - TZ=Europe/Paris
+    volumes:
+      - /volume1/docker/yarr/:/data/
+    restart: on-failure:3
