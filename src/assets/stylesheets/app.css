@@ -12,7 +12,12 @@ body {
 
 /* Added larger font size for item list panel */
 #col-item-list {
-  font-size: 18px !important;
+  font-size: 20px !important;
+}
+
+/* Make date smaller in item list panel */
+#col-item-list .selectgroup-label > div > small.flex-shrink-0 {
+  font-size: 12px !important;
 }
 
 /* bootstrap customizations */
