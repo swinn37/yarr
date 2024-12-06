@@ -284,10 +284,10 @@
                                 <span class="icon icon-small mr-1" v-if="item.status=='unread'">{% inline "circle-full.svg" %}</span>
                                 <span class="icon icon-small mr-1" v-if="item.status=='starred'">{% inline "star-full.svg" %}</span>
                             </transition>
-                            <div class="flex-fill text-truncate mr-1">
+                            <small class="flex-fill text-truncate mr-1">
                                 <span class="icon mr-2"><img :src="'./api/feeds/'+item.feed_id+'/icon'" alt="" loading="lazy" @error="setDefaultIcon"></span>
                                 {{ item.title || 'untitled' }}
-                            </div>
+                            </small>
                             <small class="flex-shrink-0"><relative-time v-bind:title="formatDate(item.date)" :val="item.date"/></small>
                         </div>
                     </div>

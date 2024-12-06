@@ -710,6 +710,7 @@ var vm = new Vue({
       `;
       const encodedSvg = encodeURIComponent(svgString);
       event.target.src = `data:image/svg+xml,${encodedSvg}`;
+    },
     // navigation helper, navigate relative to selected item
     navigateToItem: function(relativePosition) {
       let vm = this
