@@ -10,6 +10,11 @@ body {
   overscroll-behavior: none;
 }
 
+/* Added larger font size for item list panel */
+#col-item-list {
+  font-size: 18px !important;
+}
+
 /* bootstrap customizations */
 
 .btn-link {
