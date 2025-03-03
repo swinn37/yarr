@@ -1,4 +1,4 @@
-VERSION=2.4
+VERSION=2.5
 GITHASH=$(shell git rev-parse --short=8 HEAD)
 
 GO_LDFLAGS = -s -w -X 'main.Version=$(VERSION)' -X 'main.GitHash=$(GITHASH)'
@@ -23,8 +23,8 @@ build_linux:
 build_windows:
 	mkdir -p _output/windows
 	go run ./cmd/generate_versioninfo -version "$(VERSION)" -outfile src/platform/versioninfo.rc
-	windres -i src/platform/versioninfo.rc -O coff -o src/platform/versioninfo.syso
-	GOOS=windows go build -tags "sqlite_foreign_keys windows" -ldflags="$(GO_LDFLAGS) -H windowsgui" -o _output/windows/yarr.exe ./cmd/yarr
+	x86_64-w64-mingw32-windres -i src/platform/versioninfo.rc -O coff -o src/platform/versioninfo.syso
+	GOOS=windows CC=x86_64-w64-mingw32-gcc go build -tags "sqlite_foreign_keys windows" -ldflags="$(GO_LDFLAGS) -H windowsgui" -o _output/windows/yarr.exe ./cmd/yarr
 
 serve:
 	go run -tags "sqlite_foreign_keys" ./cmd/yarr -db local.db

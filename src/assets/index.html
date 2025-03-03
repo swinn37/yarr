@@ -42,6 +42,13 @@
                     <span class="icon">{% inline "assorted.svg" %}</span>
                 </button>
                 <div class="flex-grow-1"></div>
+                <div class="flex-grow-2"></div>
+                <button class="toolbar-item"
+                        title="Refresh Feeds"
+                        @click="fetchAllFeeds()">
+                    <span class="icon">{% inline "rotate-cw.svg" %}</span>
+                </button>
+                <div class="flex-grow-2"></div>
                 <dropdown class="settings-dropdown" toggle-class="btn btn-link toolbar-item px-2" ref="menuDropdown" drop="right" title="Settings">
                     <template v-slot:button>
                         <span class="icon">{% inline "more-horizontal.svg" %}</span>
@@ -64,7 +71,7 @@
                         <button class="btn btn-link col-4 px-0 rounded-0"
                                 :class="'theme-'+t"
                                 @click.stop="theme.name = t"
-                                v-for="t in ['light', 'sepia', 'night']">
+                                v-for="t in ['light', 'grey', 'night']">
                             <span class="icon" v-if="theme.name == t">{% inline "check.svg" %}</span>
                         </button>
                     </div>
@@ -278,11 +285,11 @@
                                 <span class="icon icon-small mr-1" v-if="item.status=='starred'">{% inline "star-full.svg" %}</span>
                             </transition>
                             <small class="flex-fill text-truncate mr-1">
-                                {{ (feedsById[item.feed_id] || {}).title }}
+                                <span class="icon mr-2"><img :src="'./api/feeds/'+item.feed_id+'/icon'" alt="" loading="lazy" @error="setDefaultIcon"></span>
+                                {{ item.title || 'untitled' }}
                             </small>
-                            <small class="flex-shrink-0"><relative-time v-bind:title="formatDate(item.date)" :val="item.date"/></small>
+                            <small class="flex-shrink-0"><formatted-date v-bind:title="formatDate(item.date)" :val="item.date"/></small>
                         </div>
-                        <div>{{ item.title || 'untitled' }}</div>
                     </div>
                 </label>
                 <button class="btn btn-link btn-block loading my-3" v-if="itemsHasMore"></button>

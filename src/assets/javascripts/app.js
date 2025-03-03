@@ -1,81 +1,152 @@
 'use strict';
 
-var TITLE = document.title
+var TITLE = document.title;
+
+// Add middle-click handler for opening links in new tabs
+document.addEventListener('mousedown', function(e) {
+  if (e.button === 1) { // Middle mouse button
+    // Empêcher immédiatement le comportement par défaut du navigateur pour le clic molette (auto-scroll)
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // First check for direct links
+    let target = e.target.closest('a');
+    if (target && target.href) {
+      
+      // Vérifier si c'est l'icône "Open Link" dans la barre d'outils
+      if (target.classList.contains('toolbar-item') && target.title === "Open Link") {
+        // Pour l'icône "Open Link", laisser le navigateur gérer l'ouverture
+        return;
+      }
+      
+      // Pour les autres liens, ouvrir manuellement
+      window.open(target.href, '_blank');
+      
+      // Check if this is an article link in the content area
+      if (vm.itemSelectedDetails && target.href === vm.itemSelectedDetails.link) {
+        return; // Link is already marked as read since it's the selected item
+      }
+      
+      // Check if this link matches any item in the list
+      let matchingItem = vm.items.find(function(i) { 
+        return i.link === target.href && i.status === 'unread';
+      });
+      
+      if (matchingItem) {
+        // Mark the item as read
+        api.items.update(matchingItem.id, {status: 'read'}).then(function() {
+          vm.feedStats[matchingItem.feed_id].unread -= 1;
+          matchingItem.status = 'read';
+        });
+      }
+      
+      return;
+    }
+
+    // Then check for item list entries
+    let itemElement = e.target.closest('.selectgroup');
+    if (itemElement) {
+      // Empêcher le comportement par défaut du navigateur pour le clic molette
+      e.stopPropagation();
+      
+      let input = itemElement.querySelector('input[name="item"]');
+      if (input && input.value) {
+        let itemId = input.value;
+        let item = vm.items.find(function(i) { return i.id == itemId; });
+        if (item) {
+          api.items.get(itemId).then(function(fullItem) {
+            if (fullItem && fullItem.link) {
+              window.open(fullItem.link, '_blank');
+              
+              // Mark the item as read if it's unread
+              if (fullItem.status === 'unread') {
+                api.items.update(fullItem.id, {status: 'read'}).then(function() {
+                  vm.feedStats[fullItem.feed_id].unread -= 1;
+                  item.status = 'read';
+                });
+              }
+            }
+          });
+        }
+      }
+    }
+  }
+});
 
 function scrollto(target, scroll) {
-  var padding = 10
-  var targetRect = target.getBoundingClientRect()
-  var scrollRect = scroll.getBoundingClientRect()
+  var padding = 10;
+  var targetRect = target.getBoundingClientRect();
+  var scrollRect = scroll.getBoundingClientRect();
 
   // target
-  var relativeOffset = targetRect.y - scrollRect.y
-  var absoluteOffset = relativeOffset + scroll.scrollTop
+  var relativeOffset = targetRect.y - scrollRect.y;
+  var absoluteOffset = relativeOffset + scroll.scrollTop;
 
-  if (padding <= relativeOffset && relativeOffset + targetRect.height <= scrollRect.height - padding) return
+  if (padding <= relativeOffset && relativeOffset + targetRect.height <= scrollRect.height - padding) return;
 
-  var newPos = scroll.scrollTop
+  var newPos = scroll.scrollTop;
   if (relativeOffset < padding) {
-    newPos = absoluteOffset - padding
+    newPos = absoluteOffset - padding;
   } else {
-    newPos = absoluteOffset - scrollRect.height + targetRect.height + padding
+    newPos = absoluteOffset - scrollRect.height + targetRect.height + padding;
   }
-  scroll.scrollTop = Math.round(newPos)
+  scroll.scrollTop = Math.round(newPos);
 }
 
 var debounce = function(callback, wait) {
-  var timeout
+  var timeout;
   return function() {
-    var ctx = this, args = arguments
-    clearTimeout(timeout)
+    var ctx = this, args = arguments;
+    clearTimeout(timeout);
     timeout = setTimeout(function() {
-      callback.apply(ctx, args)
-    }, wait)
-  }
-}
+      callback.apply(ctx, args);
+    }, wait);
+  };
+};
 
 Vue.directive('scroll', {
   inserted: function(el, binding) {
     el.addEventListener('scroll', debounce(function(event) {
-      binding.value(event, el)
-    }, 200))
-  },
-})
+      binding.value(event, el);
+    }, 200));
+  }
+});
 
 Vue.directive('focus', {
   inserted: function(el) {
-    el.focus()
+    el.focus();
   }
-})
+});
 
 Vue.component('drag', {
   props: ['width'],
   template: '<div class="drag"></div>',
   mounted: function() {
-    var self = this
-    var startX = undefined
-    var initW = undefined
+    var self = this;
+    var startX = undefined;
+    var initW = undefined;
     var onMouseMove = function(e) {
-      var offset = e.clientX - startX
-      var newWidth = initW + offset
-      self.$emit('resize', newWidth)
-    }
+      var offset = e.clientX - startX;
+      var newWidth = initW + offset;
+      self.$emit('resize', newWidth);
+    };
     var onMouseUp = function(e) {
-      document.removeEventListener('mousemove', onMouseMove)
-      document.removeEventListener('mouseup', onMouseUp)
-    }
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
     this.$el.addEventListener('mousedown', function(e) {
-      startX = e.clientX
-      initW = self.width
-      document.addEventListener('mousemove', onMouseMove)
-      document.addEventListener('mouseup', onMouseUp)
-    })
-  },
-})
+      startX = e.clientX;
+      initW = self.width;
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
+  }
+});
 
 Vue.component('dropdown', {
   props: ['class', 'toggle-class', 'ref', 'drop', 'title'],
   data: function() {
-    return {open: false}
+    return {open: false};
   },
   template: `
     <div class="dropdown" :class="$attrs.class">
@@ -85,45 +156,45 @@ Vue.component('dropdown', {
   `,
   computed: {
     btnToggleClass: function() {
-      var c = this.$props.toggleClass || ''
-      c += ' dropdown-toggle dropdown-toggle-no-caret'
-      c += this.open ? ' show' : ''
-      return c.trim()
+      var c = this.$props.toggleClass || '';
+      c += ' dropdown-toggle dropdown-toggle-no-caret';
+      c += this.open ? ' show' : '';
+      return c.trim();
     }
   },
   methods: {
     toggle: function(e) {
-      this.open ? this.hide() : this.show()
+      this.open ? this.hide() : this.show();
     },
     show: function(e) {
-      this.open = true
-      this.$refs.menu.style.top = this.$refs.btn.offsetHeight + 'px'
-      var drop = this.$props.drop
+      this.open = true;
+      this.$refs.menu.style.top = this.$refs.btn.offsetHeight + 'px';
+      var drop = this.$props.drop;
 
       if (drop === 'right') {
-        this.$refs.menu.style.left = 'auto'
-        this.$refs.menu.style.right = '0'
+        this.$refs.menu.style.left = 'auto';
+        this.$refs.menu.style.right = '0';
       } else if (drop === 'center') {
         this.$nextTick(function() {
-          var btnWidth = this.$refs.btn.getBoundingClientRect().width
-          var menuWidth = this.$refs.menu.getBoundingClientRect().width
-          this.$refs.menu.style.left = '-' + ((menuWidth - btnWidth) / 2) + 'px'
-        }.bind(this))
+          var btnWidth = this.$refs.btn.getBoundingClientRect().width;
+          var menuWidth = this.$refs.menu.getBoundingClientRect().width;
+          this.$refs.menu.style.left = '-' + ((menuWidth - btnWidth) / 2) + 'px';
+        }.bind(this));
       }
 
-      document.addEventListener('click', this.clickHandler)
+      document.addEventListener('click', this.clickHandler);
     },
     hide: function() {
-      this.open = false
-      document.removeEventListener('click', this.clickHandler)
+      this.open = false;
+      document.removeEventListener('click', this.clickHandler);
     },
     clickHandler: function(e) {
-      var dropdown = e.target.closest('.dropdown')
-      if (dropdown == null || dropdown != this.$el) return this.hide()
-      if (e.target.closest('.dropdown-item') != null) return this.hide()
+      var dropdown = e.target.closest('.dropdown');
+      if (dropdown == null || dropdown != this.$el) return this.hide();
+      if (e.target.closest('.dropdown-item') != null) return this.hide();
     }
-  },
-})
+  }
+});
 
 Vue.component('modal', {
   props: ['open'],
@@ -139,634 +210,634 @@ Vue.component('modal', {
     </div>
   `,
   data: function() {
-    return {opening: false}
+    return {opening: false};
   },
   watch: {
     'open': function(newVal) {
       if (newVal) {
-        this.opening = true
-        document.addEventListener('click', this.handleClick)
+        this.opening = true;
+        document.addEventListener('click', this.handleClick);
       } else {
-        document.removeEventListener('click', this.handleClick)
+        document.removeEventListener('click', this.handleClick);
       }
-    },
+    }
   },
   methods: {
     handleClick: function(e) {
       if (this.opening) {
-        this.opening = false
-        return
+        this.opening = false;
+        return;
       }
-      if (e.target.closest('.modal-content') == null) this.$emit('hide')
-    },
-  },
-})
+      if (e.target.closest('.modal-content') == null) this.$emit('hide');
+    }
+  }
+});
 
 function dateRepr(d) {
-  var sec = (new Date().getTime() - d.getTime()) / 1000
-  var neg = sec < 0
-  var out = ''
+  var sec = (new Date().getTime() - d.getTime()) / 1000;
+  var neg = sec < 0;
+  var out = '';
 
-  sec = Math.abs(sec)
-  if (sec < 2700)  // less than 45 minutes
-    out = Math.round(sec / 60) + 'm'
-  else if (sec < 86400)  // less than 24 hours
-    out = Math.round(sec / 3600) + 'h'
-  else if (sec < 604800)  // less than a week
-    out = Math.round(sec / 86400) + 'd'
-  else
-    out = d.toLocaleDateString(undefined, {year: "numeric", month: "long", day: "numeric"})
+  sec = Math.abs(sec);
+  out = d.toLocaleDateString(undefined, {year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric"});
 
-  if (neg) return '-' + out
-  return out
+  if (neg) return '-' + out;
+  return out;
 }
 
-Vue.component('relative-time', {
+Vue.component('formatted-date', {
   props: ['val'],
   data: function() {
-    var d = new Date(this.val)
+    var d = new Date(this.val);
     return {
       'date': d,
       'formatted': dateRepr(d),
-      'interval': null,
-    }
+      'interval': null
+    };
   },
   template: '<time :datetime="val">{{ formatted }}</time>',
   mounted: function() {
     this.interval = setInterval(function() {
-      this.formatted = dateRepr(this.date)
-    }.bind(this), 600000)  // every 10 minutes
+      this.formatted = dateRepr(this.date);
+    }.bind(this), 600000);  // every 10 minutes
   },
   destroyed: function() {
-    clearInterval(this.interval)
-  },
-})
+    clearInterval(this.interval);
+  }
+});
 
 var vm = new Vue({
   created: function() {
     this.refreshStats()
       .then(this.refreshFeeds.bind(this))
-      .then(this.refreshItems.bind(this, false))
+      .then(this.refreshItems.bind(this, false));
 
     api.feeds.list_errors().then(function(errors) {
-      vm.feed_errors = errors
-    })
+      vm.feed_errors = errors;
+    });
   },
   data: function() {
-    var s = app.settings
+    var s = app.settings;
     return {
-      'filterSelected': s.filter,
-      'folders': [],
-      'feeds': [],
-      'feedSelected': s.feed,
-      'feedListWidth': s.feed_list_width || 300,
-      'feedNewChoice': [],
-      'feedNewChoiceSelected': '',
-      'items': [],
-      'itemsHasMore': true,
-      'itemSelected': null,
-      'itemSelectedDetails': null,
-      'itemSelectedReadability': '',
-      'itemSearch': '',
-      'itemSortNewestFirst': s.sort_newest_first,
-      'itemListWidth': s.item_list_width || 300,
-
-      'filteredFeedStats': {},
-      'filteredFolderStats': {},
-      'filteredTotalStats': null,
-
-      'settings': '',
-      'loading': {
-        'feeds': 0,
-        'newfeed': false,
-        'items': false,
-        'readability': false,
+      filterSelected: s.filter,
+      folders: [],
+      feeds: [],
+      feedSelected: s.feed,
+      feedListWidth: s.feed_list_width || 300,
+      feedNewChoice: [],
+      feedNewChoiceSelected: '',
+      items: [],
+      itemsHasMore: true,
+      itemSelected: null,
+      itemSelectedDetails: null,
+      itemSelectedReadability: '',
+      itemSearch: '',
+      itemSortNewestFirst: s.sort_newest_first,
+      itemListWidth: s.item_list_width || 300,
+      filteredFeedStats: {},
+      filteredFolderStats: {},
+      filteredTotalStats: null,
+      settings: '',
+      loading: {
+        feeds: 0,
+        newfeed: false,
+        items: false,
+        readability: false
       },
-      'fonts': ['', 'serif', 'monospace'],
-      'feedStats': {},
-      'theme': {
-        'name': s.theme_name,
-        'font': s.theme_font,
-        'size': s.theme_size,
+      fonts: ['', 'serif', 'monospace'],
+      feedStats: {},
+      theme: {
+        name: s.theme_name,
+        font: s.theme_font,
+        size: s.theme_size
       },
-      'refreshRate': s.refresh_rate,
-      'authenticated': app.authenticated,
-      'feed_errors': {},
-    }
+      refreshRate: s.refresh_rate,
+      authenticated: app.authenticated,
+      feed_errors: {}
+    };
   },
   computed: {
     foldersWithFeeds: function() {
       var feedsByFolders = this.feeds.reduce(function(folders, feed) {
         if (!folders[feed.folder_id])
-          folders[feed.folder_id] = [feed]
+          folders[feed.folder_id] = [feed];
         else
-          folders[feed.folder_id].push(feed)
-        return folders
-      }, {})
+          folders[feed.folder_id].push(feed);
+        return folders;
+      }, {});
       var folders = this.folders.slice().map(function(folder) {
-        folder.feeds = feedsByFolders[folder.id]
-        return folder
-      })
-      folders.push({id: null, feeds: feedsByFolders[null]})
-      return folders
+        folder.feeds = feedsByFolders[folder.id];
+        return folder;
+      });
+      folders.push({id: null, feeds: feedsByFolders[null]});
+      return folders;
     },
     feedsById: function() {
-      return this.feeds.reduce(function(acc, f) { acc[f.id] = f; return acc }, {})
+      return this.feeds.reduce(function(acc, f) { acc[f.id] = f; return acc; }, {});
     },
     foldersById: function() {
-      return this.folders.reduce(function(acc, f) { acc[f.id] = f; return acc }, {})
+      return this.folders.reduce(function(acc, f) { acc[f.id] = f; return acc; }, {});
     },
     current: function() {
-      var parts = (this.feedSelected || '').split(':', 2)
-      var type = parts[0]
-      var guid = parts[1]
+      var parts = (this.feedSelected || '').split(':', 2);
+      var type = parts[0];
+      var guid = parts[1];
 
-      var folder = {}, feed = {}
+      var folder = {}, feed = {};
 
       if (type == 'feed')
-        feed = this.feedsById[guid] || {}
+        feed = this.feedsById[guid] || {};
       if (type == 'folder')
-        folder = this.foldersById[guid] || {}
+        folder = this.foldersById[guid] || {};
 
-      return {type: type, feed: feed, folder: folder}
+      return {type: type, feed: feed, folder: folder};
     },
     itemSelectedContent: function() {
-      if (!this.itemSelected) return ''
+      if (!this.itemSelected) return '';
 
       if (this.itemSelectedReadability)
-        return this.itemSelectedReadability
+        return this.itemSelectedReadability;
 
-      return this.itemSelectedDetails.content || ''
-    },
+      return this.itemSelectedDetails.content || '';
+    }
   },
   watch: {
     'theme': {
       deep: true,
       handler: function(theme) {
-        document.body.classList.value = 'theme-' + theme.name
+        document.body.classList.value = 'theme-' + theme.name;
         api.settings.update({
           theme_name: theme.name,
           theme_font: theme.font,
-          theme_size: theme.size,
-        })
-      },
+          theme_size: theme.size
+        });
+      }
     },
     'feedStats': {
       deep: true,
       handler: debounce(function() {
-        var title = TITLE
+        var title = TITLE;
         var unreadCount = Object.values(this.feedStats).reduce(function(acc, stat) {
-          return acc + stat.unread
-        }, 0)
+          return acc + stat.unread;
+        }, 0);
         if (unreadCount) {
-          title += ' ('+unreadCount+')'
+          title += ' ('+unreadCount+')';
         }
-        document.title = title
-        this.computeStats()
-      }, 500),
+        document.title = title;
+        this.computeStats();
+      }, 500)
     },
     'filterSelected': function(newVal, oldVal) {
-      if (oldVal === undefined) return  // do nothing, initial setup
-      api.settings.update({filter: newVal}).then(this.refreshItems.bind(this, false))
-      this.itemSelected = null
-      this.computeStats()
+      if (oldVal === undefined) return;  // do nothing, initial setup
+      api.settings.update({filter: newVal}).then(this.refreshItems.bind(this, false));
+      this.itemSelected = null;
+      this.computeStats();
     },
     'feedSelected': function(newVal, oldVal) {
-      if (oldVal === undefined) return  // do nothing, initial setup
-      api.settings.update({feed: newVal}).then(this.refreshItems.bind(this, false))
-      this.itemSelected = null
-      if (this.$refs.itemlist) this.$refs.itemlist.scrollTop = 0
+      if (oldVal === undefined) return;  // do nothing, initial setup
+      api.settings.update({feed: newVal}).then(this.refreshItems.bind(this, false));
+      this.itemSelected = null;
+      if (this.$refs.itemlist) this.$refs.itemlist.scrollTop = 0;
     },
     'itemSelected': function(newVal, oldVal) {
-      this.itemSelectedReadability = ''
+      this.itemSelectedReadability = '';
       if (newVal === null) {
-        this.itemSelectedDetails = null
-        return
+        this.itemSelectedDetails = null;
+        return;
       }
-      if (this.$refs.content) this.$refs.content.scrollTop = 0
+      if (this.$refs.content) this.$refs.content.scrollTop = 0;
 
       api.items.get(newVal).then(function(item) {
-        this.itemSelectedDetails = item
+        this.itemSelectedDetails = item;
         if (this.itemSelectedDetails.status == 'unread') {
           api.items.update(this.itemSelectedDetails.id, {status: 'read'}).then(function() {
-            this.feedStats[this.itemSelectedDetails.feed_id].unread -= 1
-            var itemInList = this.items.find(function(i) { return i.id == item.id })
-            if (itemInList) itemInList.status = 'read'
-            this.itemSelectedDetails.status = 'read'
-          }.bind(this))
+            this.feedStats[this.itemSelectedDetails.feed_id].unread -= 1;
+            var itemInList = this.items.find(function(i) { return i.id == item.id; });
+            if (itemInList) itemInList.status = 'read';
+            this.itemSelectedDetails.status = 'read';
+          }.bind(this));
         }
-      }.bind(this))
+      }.bind(this));
     },
     'itemSearch': debounce(function(newVal) {
-      this.refreshItems()
+      this.refreshItems();
     }, 500),
     'itemSortNewestFirst': function(newVal, oldVal) {
-      if (oldVal === undefined) return  // do nothing, initial setup
-      api.settings.update({sort_newest_first: newVal}).then(vm.refreshItems.bind(this, false))
+      if (oldVal === undefined) return;  // do nothing, initial setup
+      api.settings.update({sort_newest_first: newVal}).then(vm.refreshItems.bind(this, false));
     },
     'feedListWidth': debounce(function(newVal, oldVal) {
-      if (oldVal === undefined) return  // do nothing, initial setup
-      api.settings.update({feed_list_width: newVal})
+      if (oldVal === undefined) return;  // do nothing, initial setup
+      api.settings.update({feed_list_width: newVal});
     }, 1000),
     'itemListWidth': debounce(function(newVal, oldVal) {
-      if (oldVal === undefined) return  // do nothing, initial setup
-      api.settings.update({item_list_width: newVal})
+      if (oldVal === undefined) return;  // do nothing, initial setup
+      api.settings.update({item_list_width: newVal});
     }, 1000),
     'refreshRate': function(newVal, oldVal) {
-      if (oldVal === undefined) return  // do nothing, initial setup
-      api.settings.update({refresh_rate: newVal})
-    },
+      if (oldVal === undefined) return;  // do nothing, initial setup
+      api.settings.update({refresh_rate: newVal});
+    }
   },
   methods: {
     refreshStats: function(loopMode) {
       return api.status().then(function(data) {
-        if (loopMode && !vm.itemSelected) vm.refreshItems()
+        if (loopMode && !vm.itemSelected) vm.refreshItems();
 
-        vm.loading.feeds = data.running
+        vm.loading.feeds = data.running;
         if (data.running) {
-          setTimeout(vm.refreshStats.bind(vm, true), 500)
+          setTimeout(vm.refreshStats.bind(vm, true), 500);
         }
         vm.feedStats = data.stats.reduce(function(acc, stat) {
-          acc[stat.feed_id] = stat
-          return acc
-        }, {})
+          acc[stat.feed_id] = stat;
+          return acc;
+        }, {});
 
         api.feeds.list_errors().then(function(errors) {
-          vm.feed_errors = errors
-        })
-      })
+          vm.feed_errors = errors;
+        });
+      });
     },
     getItemsQuery: function() {
-      var query = {}
+      var query = {};
       if (this.feedSelected) {
-        var parts = this.feedSelected.split(':', 2)
-        var type = parts[0]
-        var guid = parts[1]
+        var parts = this.feedSelected.split(':', 2);
+        var type = parts[0];
+        var guid = parts[1];
         if (type == 'feed') {
-          query.feed_id = guid
+          query.feed_id = guid;
         } else if (type == 'folder') {
-          query.folder_id = guid
+          query.folder_id = guid;
         }
       }
       if (this.filterSelected) {
-        query.status = this.filterSelected
+        query.status = this.filterSelected;
       }
       if (this.itemSearch) {
-        query.search = this.itemSearch
+        query.search = this.itemSearch;
       }
       if (!this.itemSortNewestFirst) {
-        query.oldest_first = true
+        query.oldest_first = true;
       }
-      return query
+      return query;
     },
     refreshFeeds: function() {
       return Promise
         .all([api.folders.list(), api.feeds.list()])
         .then(function(values) {
-          vm.folders = values[0]
-          vm.feeds = values[1]
-        })
+          vm.folders = values[0];
+          vm.feeds = values[1];
+        });
     },
-    refreshItems: function(loadMore = false) {
+    refreshItems: function(loadMore) {
+      if (loadMore === undefined) loadMore = false;
       if (this.feedSelected === null) {
-        vm.items = []
-        vm.itemsHasMore = false
-        return
+        vm.items = [];
+        vm.itemsHasMore = false;
+        return;
       }
 
-      var query = this.getItemsQuery()
+      var query = this.getItemsQuery();
       if (loadMore) {
-        query.after = vm.items[vm.items.length-1].id
+        query.after = vm.items[vm.items.length-1].id;
       }
 
-      this.loading.items = true
+      this.loading.items = true;
       return api.items.list(query).then(function(data) {
         if (loadMore) {
-          vm.items = vm.items.concat(data.list)
+          vm.items = vm.items.concat(data.list);
         } else {
-          vm.items = data.list
+          vm.items = data.list;
         }
-        vm.itemsHasMore = data.has_more
-        vm.loading.items = false
+        vm.itemsHasMore = data.has_more;
+        vm.loading.items = false;
 
         // load more if there's some space left at the bottom of the item list.
         vm.$nextTick(function() {
           if (vm.itemsHasMore && !vm.loading.items && vm.itemListCloseToBottom()) {
-            vm.refreshItems(true)
+            vm.refreshItems(true);
           }
-        })
-      })
+        });
+      });
     },
     itemListCloseToBottom: function() {
       // approx. vertical space at the bottom of the list (loading el & paddings) when 1rem = 16px
-      var bottomSpace = 70
-      var scale = (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) / 16
+      var bottomSpace = 70;
+      var scale = (parseFloat(getComputedStyle(document.documentElement).fontSize) || 16) / 16;
 
-      var el = this.$refs.itemlist
+      var el = this.$refs.itemlist;
 
-      if (el.scrollHeight === 0) return false  // element is invisible (responsive design)
+      if (el.scrollHeight === 0) return false;  // element is invisible (responsive design)
 
-      var closeToBottom = (el.scrollHeight - el.scrollTop - el.offsetHeight) < bottomSpace * scale
-      return closeToBottom
+      var closeToBottom = (el.scrollHeight - el.scrollTop - el.offsetHeight) < bottomSpace * scale;
+      return closeToBottom;
     },
     loadMoreItems: function(event, el) {
-      if (!this.itemsHasMore) return
-      if (this.loading.items) return
-      if (this.itemListCloseToBottom()) return this.refreshItems(true)
-      if (this.itemSelected && this.itemSelected === this.items[this.items.length - 1].id) return this.refreshItems(true)
+      if (!this.itemsHasMore) return;
+      if (this.loading.items) return;
+      if (this.itemListCloseToBottom()) return this.refreshItems(true);
+      if (this.itemSelected && this.itemSelected === this.items[this.items.length - 1].id) return this.refreshItems(true);
     },
     markItemsRead: function() {
-      var query = this.getItemsQuery()
+      var query = this.getItemsQuery();
       api.items.mark_read(query).then(function() {
-        vm.items = []
-        vm.itemsPage = {'cur': 1, 'num': 1}
-        vm.itemSelected = null
-        vm.itemsHasMore = false
-        vm.refreshStats()
-      })
+        vm.items = [];
+        vm.itemsPage = {'cur': 1, 'num': 1};
+        vm.itemSelected = null;
+        vm.itemsHasMore = false;
+        vm.refreshStats();
+      });
     },
     toggleFolderExpanded: function(folder) {
-      folder.is_expanded = !folder.is_expanded
-      api.folders.update(folder.id, {is_expanded: folder.is_expanded})
+      folder.is_expanded = !folder.is_expanded;
+      api.folders.update(folder.id, {is_expanded: folder.is_expanded});
     },
     formatDate: function(datestr) {
       var options = {
         year: "numeric", month: "long", day: "numeric",
-        hour: '2-digit', minute: '2-digit',
-      }
-      return new Date(datestr).toLocaleDateString(undefined, options)
+        hour: '2-digit', minute: '2-digit'
+      };
+      return new Date(datestr).toLocaleDateString(undefined, options);
     },
     moveFeed: function(feed, folder) {
-      var folder_id = folder ? folder.id : null
+      var folder_id = folder ? folder.id : null;
       api.feeds.update(feed.id, {folder_id: folder_id}).then(function() {
-        feed.folder_id = folder_id
-        vm.refreshStats()
-      })
+        feed.folder_id = folder_id;
+        vm.refreshStats();
+      });
     },
     moveFeedToNewFolder: function(feed) {
-      var title = prompt('Enter folder name:')
-      if (!title) return
+      var title = prompt('Enter folder name:');
+      if (!title) return;
       api.folders.create({'title': title}).then(function(folder) {
         api.feeds.update(feed.id, {folder_id: folder.id}).then(function() {
           vm.refreshFeeds().then(function() {
-            vm.refreshStats()
-          })
-        })
-      })
+            vm.refreshStats();
+          });
+        });
+      });
     },
     createNewFeedFolder: function() {
-      var title = prompt('Enter folder name:')
-      if (!title) return
+      var title = prompt('Enter folder name:');
+      if (!title) return;
       api.folders.create({'title': title}).then(function(result) {
         vm.refreshFeeds().then(function() {
           vm.$nextTick(function() {
             if (vm.$refs.newFeedFolder) {
-              vm.$refs.newFeedFolder.value = result.id
+              vm.$refs.newFeedFolder.value = result.id;
             }
-          })
-        })
-      })
+          });
+        });
+      });
     },
     renameFolder: function(folder) {
-      var newTitle = prompt('Enter new title', folder.title)
+      var newTitle = prompt('Enter new title', folder.title);
       if (newTitle) {
         api.folders.update(folder.id, {title: newTitle}).then(function() {
-          folder.title = newTitle
+          folder.title = newTitle;
           this.folders.sort(function(a, b) {
-            return a.title.localeCompare(b.title)
-          })
-        }.bind(this))
+            return a.title.localeCompare(b.title);
+          });
+        }.bind(this));
       }
     },
     deleteFolder: function(folder) {
       if (confirm('Are you sure you want to delete ' + folder.title + '?')) {
         api.folders.delete(folder.id).then(function() {
-          vm.feedSelected = null
-          vm.refreshStats()
-          vm.refreshFeeds()
-        })
+          vm.feedSelected = null;
+          vm.refreshStats();
+          vm.refreshFeeds();
+        });
       }
     },
     updateFeedLink: function(feed) {
-      var newLink = prompt('Enter feed link', feed.feed_link)
+      var newLink = prompt('Enter feed link', feed.feed_link);
       if (newLink) {
         api.feeds.update(feed.id, {feed_link: newLink}).then(function() {
-          feed.feed_link = newLink
-        })
+          feed.feed_link = newLink;
+        });
       }
     },
     renameFeed: function(feed) {
-      var newTitle = prompt('Enter new title', feed.title)
+      var newTitle = prompt('Enter new title', feed.title);
       if (newTitle) {
         api.feeds.update(feed.id, {title: newTitle}).then(function() {
-          feed.title = newTitle
-        })
+          feed.title = newTitle;
+        });
       }
     },
     deleteFeed: function(feed) {
       if (confirm('Are you sure you want to delete ' + feed.title + '?')) {
         api.feeds.delete(feed.id).then(function() {
-          vm.feedSelected = null
-          vm.refreshStats()
-          vm.refreshFeeds()
-        })
+          vm.feedSelected = null;
+          vm.refreshStats();
+          vm.refreshFeeds();
+        });
       }
     },
     createFeed: function(event) {
-      var form = event.target
+      var form = event.target;
       var data = {
         url: form.querySelector('input[name=url]').value,
-        folder_id: parseInt(form.querySelector('select[name=folder_id]').value) || null,
-      }
+        folder_id: parseInt(form.querySelector('select[name=folder_id]').value) || null
+      };
       if (this.feedNewChoiceSelected) {
-        data.url = this.feedNewChoiceSelected
+        data.url = this.feedNewChoiceSelected;
       }
-      this.loading.newfeed = true
+      this.loading.newfeed = true;
       api.feeds.create(data).then(function(result) {
         if (result.status === 'success') {
-          vm.refreshFeeds()
-          vm.refreshStats()
-          vm.settings = ''
-          vm.feedSelected = 'feed:' + result.feed.id
+          vm.refreshFeeds();
+          vm.refreshStats();
+          vm.settings = '';
+          vm.feedSelected = 'feed:' + result.feed.id;
         } else if (result.status === 'multiple') {
-          vm.feedNewChoice = result.choice
-          vm.feedNewChoiceSelected = result.choice[0].url
+          vm.feedNewChoice = result.choice;
+          vm.feedNewChoiceSelected = result.choice[0].url;
         } else {
-          alert('No feeds found at the given url.')
+          alert('No feeds found at the given url.');
         }
-        vm.loading.newfeed = false
-      })
+        vm.loading.newfeed = false;
+      });
     },
     toggleItemStatus: function(item, targetstatus, fallbackstatus) {
-      var oldstatus = item.status
-      var newstatus = item.status !== targetstatus ? targetstatus : fallbackstatus
+      var oldstatus = item.status;
+      var newstatus = item.status !== targetstatus ? targetstatus : fallbackstatus;
 
       var updateStats = function(status, incr) {
         if ((status == 'unread') || (status == 'starred')) {
-          this.feedStats[item.feed_id][status] += incr
+          this.feedStats[item.feed_id][status] += incr;
         }
-      }.bind(this)
+      }.bind(this);
 
       api.items.update(item.id, {status: newstatus}).then(function() {
-        updateStats(oldstatus, -1)
-        updateStats(newstatus, +1)
+        updateStats(oldstatus, -1);
+        updateStats(newstatus, +1);
 
-        var itemInList = this.items.find(function(i) { return i.id == item.id })
-        if (itemInList) itemInList.status = newstatus
-        item.status = newstatus
-      }.bind(this))
+        var itemInList = this.items.find(function(i) { return i.id == item.id; });
+        if (itemInList) itemInList.status = newstatus;
+        item.status = newstatus;
+      }.bind(this));
     },
     toggleItemStarred: function(item) {
-      this.toggleItemStatus(item, 'starred', 'read')
+      this.toggleItemStatus(item, 'starred', 'read');
     },
     toggleItemRead: function(item) {
-      this.toggleItemStatus(item, 'unread', 'read')
+      this.toggleItemStatus(item, 'unread', 'read');
     },
     importOPML: function(event) {
-      var input = event.target
-      var form = document.querySelector('#opml-import-form')
-      this.$refs.menuDropdown.hide()
+      var input = event.target;
+      var form = document.querySelector('#opml-import-form');
+      this.$refs.menuDropdown.hide();
       api.upload_opml(form).then(function() {
-        input.value = ''
-        vm.refreshFeeds()
-        vm.refreshStats()
-      })
+        input.value = '';
+        vm.refreshFeeds();
+        vm.refreshStats();
+      });
     },
     logout: function() {
       api.logout().then(function() {
-        document.location.reload()
-      })
+        document.location.reload();
+      });
     },
     toggleReadability: function() {
       if (this.itemSelectedReadability) {
-        this.itemSelectedReadability = null
-        return
+        this.itemSelectedReadability = null;
+        return;
       }
-      var item = this.itemSelectedDetails
-      if (!item) return
+      var item = this.itemSelectedDetails;
+      if (!item) return;
       if (item.link) {
-        this.loading.readability = true
+        this.loading.readability = true;
         api.crawl(item.link).then(function(data) {
-          vm.itemSelectedReadability = data && data.content
-          vm.loading.readability = false
-        })
+          vm.itemSelectedReadability = data && data.content;
+          vm.loading.readability = false;
+        });
       }
     },
     showSettings: function(settings) {
-      this.settings = settings
+      this.settings = settings;
 
       if (settings === 'create') {
-        vm.feedNewChoice = []
-        vm.feedNewChoiceSelected = ''
+        vm.feedNewChoice = [];
+        vm.feedNewChoiceSelected = '';
       }
     },
     resizeFeedList: function(width) {
-      this.feedListWidth = Math.min(Math.max(200, width), 700)
+      this.feedListWidth = Math.min(Math.max(250, width), 500);
     },
     resizeItemList: function(width) {
-      this.itemListWidth = Math.min(Math.max(200, width), 700)
+      this.itemListWidth = Math.min(Math.max(600, width), 900);
     },
     resetFeedChoice: function() {
-      this.feedNewChoice = []
-      this.feedNewChoiceSelected = ''
+      this.feedNewChoice = [];
+      this.feedNewChoiceSelected = '';
     },
     incrFont: function(x) {
-      this.theme.size = +(this.theme.size + (0.1 * x)).toFixed(1)
+      this.theme.size = +(this.theme.size + (0.1 * x)).toFixed(1);
     },
     fetchAllFeeds: function() {
-      if (this.loading.feeds) return
+      if (this.loading.feeds) return;
       api.feeds.refresh().then(function() {
-        vm.refreshStats()
-      })
+        vm.refreshStats();
+      });
     },
     computeStats: function() {
-      var filter = this.filterSelected
+      var filter = this.filterSelected;
       if (!filter) {
-        this.filteredFeedStats = {}
-        this.filteredFolderStats = {}
-        this.filteredTotalStats = null
-        return
+        this.filteredFeedStats = {};
+        this.filteredFolderStats = {};
+        this.filteredTotalStats = null;
+        return;
       }
 
-      var statsFeeds = {}, statsFolders = {}, statsTotal = 0
+      var statsFeeds = {}, statsFolders = {}, statsTotal = 0;
 
       for (var i = 0; i < this.feeds.length; i++) {
-        var feed = this.feeds[i]
-        if (!this.feedStats[feed.id]) continue
+        var feed = this.feeds[i];
+        if (!this.feedStats[feed.id]) continue;
 
-        var n = vm.feedStats[feed.id][filter] || 0
+        var n = vm.feedStats[feed.id][filter] || 0;
 
-        if (!statsFolders[feed.folder_id]) statsFolders[feed.folder_id] = 0
+        if (!statsFolders[feed.folder_id]) statsFolders[feed.folder_id] = 0;
 
-        statsFeeds[feed.id] = n
-        statsFolders[feed.folder_id] += n
-        statsTotal += n
+        statsFeeds[feed.id] = n;
+        statsFolders[feed.folder_id] += n;
+        statsTotal += n;
       }
 
-      this.filteredFeedStats = statsFeeds
-      this.filteredFolderStats = statsFolders
-      this.filteredTotalStats = statsTotal
+      this.filteredFeedStats = statsFeeds;
+      this.filteredFolderStats = statsFolders;
+      this.filteredTotalStats = statsTotal;
     },
-    // navigation helper, navigate relative to selected item
+    setDefaultIcon: function(event) {
+      const svgString = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="orange" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-rss">
+          <path d="M4 11a9 9 0 0 1 9 9"></path>
+          <path d="M4 4a16 16 0 0 1 16 16"></path>
+          <circle cx="5" cy="19" r="1"></circle>
+        </svg>
+      `;
+      const encodedSvg = encodeURIComponent(svgString);
+      event.target.src = `data:image/svg+xml,${encodedSvg}`;
+    },
     navigateToItem: function(relativePosition) {
-      let vm = this
+      var vm = this;
       if (vm.itemSelected == null) {
-        // if no item is selected, select first
-        if (vm.items.length !== 0) vm.itemSelected = vm.items[0].id
-        return
+        if (vm.items.length !== 0) vm.itemSelected = vm.items[0].id;
+        return;
       }
 
-      var itemPosition = vm.items.findIndex(function(x) { return x.id === vm.itemSelected })
+      var itemPosition = vm.items.findIndex(function(x) { return x.id === vm.itemSelected; });
       if (itemPosition === -1) {
-        if (vm.items.length !== 0) vm.itemSelected = vm.items[0].id
-        return
+        if (vm.items.length !== 0) vm.itemSelected = vm.items[0].id;
+        return;
       }
 
-      var newPosition = itemPosition + relativePosition
-      if (newPosition < 0 || newPosition >= vm.items.length) return
+      var newPosition = itemPosition + relativePosition;
+      if (newPosition < 0 || newPosition >= vm.items.length) return;
 
-      vm.itemSelected = vm.items[newPosition].id
+      vm.itemSelected = vm.items[newPosition].id;
 
       vm.$nextTick(function() {
-        var scroll = document.querySelector('#item-list-scroll')
+        var scroll = document.querySelector('#item-list-scroll');
 
-        var handle = scroll.querySelector('input[type=radio]:checked')
-        var target = handle && handle.parentElement
+        var handle = scroll.querySelector('input[type=radio]:checked');
+        var target = handle && handle.parentElement;
 
-        if (target && scroll) scrollto(target, scroll)
+        if (target && scroll) scrollto(target, scroll);
 
-        vm.loadMoreItems()
-      })
+        vm.loadMoreItems();
+      });
     },
-    // navigation helper, navigate relative to selected feed
     navigateToFeed: function(relativePosition) {
-      let vm = this
+      var vm = this;
       var navigationList = Array.from(document.querySelectorAll('#col-feed-list input[name=feed]'))
-        .filter(function(r) { return r.offsetParent !== null && r.value !== 'folder:null' })
-        .map(function(r) { return r.value })
+        .filter(function(r) { return r.offsetParent !== null && r.value !== 'folder:null'; })
+        .map(function(r) { return r.value; });
 
-      var currentFeedPosition = navigationList.indexOf(vm.feedSelected)
+      var currentFeedPosition = navigationList.indexOf(vm.feedSelected);
 
       if (currentFeedPosition == -1) {
-        vm.feedSelected = ''
-        return
+        vm.feedSelected = '';
+        return;
       }
 
-      var newPosition = currentFeedPosition+relativePosition
-      if (newPosition < 0 || newPosition >= navigationList.length) return
+      var newPosition = currentFeedPosition+relativePosition;
+      if (newPosition < 0 || newPosition >= navigationList.length) return;
 
-      vm.feedSelected = navigationList[newPosition]
+      vm.feedSelected = navigationList[newPosition];
 
       vm.$nextTick(function() {
-        var scroll = document.querySelector('#feed-list-scroll')
+        var scroll = document.querySelector('#feed-list-scroll');
 
-        var handle = scroll.querySelector('input[type=radio]:checked')
-        var target = handle && handle.parentElement
+        var handle = scroll.querySelector('input[type=radio]:checked');
+        var target = handle && handle.parentElement;
 
-        if (target && scroll) scrollto(target, scroll)
-      })
-    },
+        if (target && scroll) scrollto(target, scroll);
+      });
+    }
   }
-})
+});
 
-vm.$mount('#app')
+vm.$mount('#app');
