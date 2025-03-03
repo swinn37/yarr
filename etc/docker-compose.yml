@@ -1,0 +1,22 @@
+version: '3.9'
+
+services:
+  yarr:
+    image: swinn/yarr:latest  # Use a specific version from a container registry
+    container_name: yarr
+    hostname: yarr
+    user: "${YARR_USER:-1026:100}"  # Use an environment variable with a default
+    ports:
+      - "7777:7777"
+    environment:
+      - TZ=Europe/Paris
+#       - YARR_AUTH=user:password  # Set a username and password for basic authentication
+    volumes:
+      - ${YARR_DATA_DIR:-/volume1/docker/yarr/}:/data/
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7777"]
+      interval: 1m
+      timeout: 10s
+      retries: 3
+      start_period: 10s
