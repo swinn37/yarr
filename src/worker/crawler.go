@@ -30,20 +30,32 @@ type DiscoverResult struct {
 
 func DiscoverFeed(candidateUrl string) (*DiscoverResult, error) {
 	result := &DiscoverResult{}
+	
+	// Vérifier que l'URL est valide
+	_, err := url.Parse(candidateUrl)
+	if err != nil {
+		return nil, fmt.Errorf("URL invalide: %v", err)
+	}
+	
 	// Query URL
 	res, err := client.get(candidateUrl)
 	if err != nil {
-		return nil, err
+		// Améliorer le message d'erreur pour les problèmes DNS
+		if strings.Contains(err.Error(), "dial tcp") && strings.Contains(err.Error(), "lookup") {
+			return nil, fmt.Errorf("problème de résolution DNS pour %s: %v (vérifiez votre connexion réseau ou les serveurs DNS)", candidateUrl, err)
+		}
+		return nil, fmt.Errorf("erreur lors de la récupération du flux: %v", err)
 	}
 	defer res.Body.Close()
+	
 	if res.StatusCode != 200 {
-		return nil, fmt.Errorf("status code %d", res.StatusCode)
+		return nil, fmt.Errorf("le serveur a répondu avec le code %d", res.StatusCode)
 	}
 	cs := getCharset(res)
 
 	body, err := io.ReadAll(res.Body)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("erreur lors de la lecture du contenu: %v", err)
 	}
 
 	// Try to feed into parser
@@ -91,19 +103,28 @@ var imageTypes = map[string]bool{
 
 func findFavicon(siteUrl, feedUrl string) (*[]byte, error) {
 	urls := make([]string, 0)
+	var lastErr error
 
 	favicon := func(link string) string {
 		u, err := url.Parse(link)
 		if err != nil {
+			lastErr = fmt.Errorf("URL invalide pour favicon: %v", err)
 			return ""
 		}
 		return fmt.Sprintf("%s://%s/favicon.ico", u.Scheme, u.Host)
 	}
 
 	if siteUrl != "" {
-		if res, err := client.get(siteUrl); err == nil {
+		res, err := client.get(siteUrl)
+		if err != nil {
+			// Enregistrer l'erreur mais continuer avec d'autres sources potentielles
+			lastErr = fmt.Errorf("erreur lors de l'accès au site %s: %v", siteUrl, err)
+		} else {
 			defer res.Body.Close()
-			if body, err := ioutil.ReadAll(res.Body); err == nil {
+			body, err := ioutil.ReadAll(res.Body)
+			if err != nil {
+				lastErr = fmt.Errorf("erreur lors de la lecture du contenu du site %s: %v", siteUrl, err)
+			} else {
 				urls = append(urls, scraper.FindIcons(string(body), siteUrl)...)
 				if c := favicon(siteUrl); c != "" {
 					urls = append(urls, c)
@@ -116,25 +137,40 @@ func findFavicon(siteUrl, feedUrl string) (*[]byte, error) {
 		urls = append(urls, c)
 	}
 
+	// Si aucune URL d'icône n'a été trouvée, retourner la dernière erreur
+	if len(urls) == 0 && lastErr != nil {
+		return &emptyIcon, fmt.Errorf("impossible de trouver des icônes: %v", lastErr)
+	}
+
 	for _, u := range urls {
 		res, err := client.get(u)
 		if err != nil {
+			lastErr = fmt.Errorf("erreur lors de l'accès à l'icône %s: %v", u, err)
 			continue
 		}
 		defer res.Body.Close()
+		
 		if res.StatusCode != 200 {
+			lastErr = fmt.Errorf("code de statut %d pour l'icône %s", res.StatusCode, u)
 			continue
 		}
 
 		content, err := ioutil.ReadAll(res.Body)
 		if err != nil {
+			lastErr = fmt.Errorf("erreur lors de la lecture de l'icône %s: %v", u, err)
 			continue
 		}
 
 		ctype := http.DetectContentType(content)
 		if imageTypes[ctype] {
 			return &content, nil
+		} else {
+			lastErr = fmt.Errorf("type de contenu non supporté pour l'icône %s: %s", u, ctype)
 		}
+	}
+	
+	if lastErr != nil {
+		return &emptyIcon, fmt.Errorf("aucune icône valide trouvée: %v", lastErr)
 	}
 	return &emptyIcon, nil
 }
@@ -176,16 +212,24 @@ func listItems(f storage.Feed, db *storage.Storage) ([]storage.Item, error) {
 
 	res, err := client.getConditional(f.FeedLink, lmod, etag)
 	if err != nil {
-		return nil, err
+		// Améliorer le message d'erreur pour les problèmes DNS
+		if strings.Contains(err.Error(), "dial tcp") && strings.Contains(err.Error(), "lookup") {
+			return nil, fmt.Errorf("problème de résolution DNS pour %s: %v (vérifiez votre connexion réseau ou les serveurs DNS)", f.FeedLink, err)
+		}
+		// Améliorer le message pour les autres erreurs réseau
+		if strings.Contains(err.Error(), "i/o timeout") {
+			return nil, fmt.Errorf("timeout lors de la connexion à %s: %v (le serveur est peut-être surchargé ou inaccessible)", f.FeedLink, err)
+		}
+		return nil, fmt.Errorf("erreur lors de la récupération du flux %s: %v", f.FeedLink, err)
 	}
 	defer res.Body.Close()
 
 	switch {
 	case res.StatusCode < 200 || res.StatusCode > 399:
 		if res.StatusCode == 404 {
-			return nil, fmt.Errorf("feed not found")
+			return nil, fmt.Errorf("flux introuvable (404) pour %s", f.FeedLink)
 		}
-		return nil, fmt.Errorf("status code %d", res.StatusCode)
+		return nil, fmt.Errorf("le serveur a répondu avec le code %d pour %s", res.StatusCode, f.FeedLink)
 	case res.StatusCode == http.StatusNotModified:
 		return nil, nil
 	}
@@ -215,12 +259,30 @@ func getCharset(res *http.Response) string {
 	return ""
 }
 
-func GetBody(url string) (string, error) {
-	res, err := client.get(url)
+func GetBody(urlStr string) (string, error) {
+	// Vérifier que l'URL est valide
+	_, err := url.Parse(urlStr)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("URL invalide: %v", err)
+	}
+	
+	res, err := client.get(urlStr)
+	if err != nil {
+		// Améliorer le message d'erreur pour les problèmes DNS
+		if strings.Contains(err.Error(), "dial tcp") && strings.Contains(err.Error(), "lookup") {
+			return "", fmt.Errorf("problème de résolution DNS pour %s: %v (vérifiez votre connexion réseau ou les serveurs DNS)", urlStr, err)
+		}
+		// Améliorer le message pour les autres erreurs réseau
+		if strings.Contains(err.Error(), "i/o timeout") {
+			return "", fmt.Errorf("timeout lors de la connexion à %s: %v (le serveur est peut-être surchargé ou inaccessible)", urlStr, err)
+		}
+		return "", fmt.Errorf("erreur lors de la récupération de la page %s: %v", urlStr, err)
 	}
 	defer res.Body.Close()
+	
+	if res.StatusCode != 200 {
+		return "", fmt.Errorf("le serveur a répondu avec le code %d pour %s", res.StatusCode, urlStr)
+	}
 
 	var r io.Reader
 
@@ -228,14 +290,14 @@ func GetBody(url string) (string, error) {
 	if strings.Contains(ctype, "charset") {
 		r, err = charset.NewReader(res.Body, ctype)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("erreur lors du décodage du charset: %v", err)
 		}
 	} else {
 		r = res.Body
 	}
 	body, err := io.ReadAll(r)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("erreur lors de la lecture du contenu: %v", err)
 	}
 	return string(body), nil
 }
