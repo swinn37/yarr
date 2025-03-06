@@ -10,6 +10,7 @@ services:
       - "7777:7777"
     environment:
       - TZ=Europe/Paris
+#       - YARR_LOGFILE=/data/yarr.log # Set a custom log file
 #       - YARR_AUTH=user:password  # Set a username and password for basic authentication
     volumes:
       - ${YARR_DATA_DIR:-/volume1/docker/yarr/}:/data/

@@ -5,7 +5,7 @@ var TITLE = document.title;
 // Add middle-click handler for opening links in new tabs
 document.addEventListener('mousedown', function(e) {
   if (e.button === 1) { // Middle mouse button
-    // Empêcher immédiatement le comportement par défaut du navigateur pour le clic molette (auto-scroll)
+    // Immediately prevent the default browser behavior for middle-click (auto-scroll)
     e.preventDefault();
     e.stopPropagation();
     
@@ -13,13 +13,13 @@ document.addEventListener('mousedown', function(e) {
     let target = e.target.closest('a');
     if (target && target.href) {
       
-      // Vérifier si c'est l'icône "Open Link" dans la barre d'outils
+      // Check if it's the "Open Link" icon in the toolbar
       if (target.classList.contains('toolbar-item') && target.title === "Open Link") {
-        // Pour l'icône "Open Link", laisser le navigateur gérer l'ouverture
+        // For the "Open Link" icon, let the browser handle the opening
         return;
       }
       
-      // Pour les autres liens, ouvrir manuellement
+      // For other links, open manually
       window.open(target.href, '_blank');
       
       // Check if this is an article link in the content area
@@ -46,7 +46,7 @@ document.addEventListener('mousedown', function(e) {
     // Then check for item list entries
     let itemElement = e.target.closest('.selectgroup');
     if (itemElement) {
-      // Empêcher le comportement par défaut du navigateur pour le clic molette
+      // Prevent the default browser behavior for middle-click
       e.stopPropagation();
       
       let input = itemElement.querySelector('input[name="item"]');
@@ -446,7 +446,7 @@ var vm = new Vue({
 
         vm.loading.feeds = data.running;
         if (data.running) {
-          setTimeout(vm.refreshStats.bind(vm, true), 500);
+          window._refreshStatsTimeout = setTimeout(vm.refreshStats.bind(vm, true), 500);
         }
         vm.feedStats = data.stats.reduce(function(acc, stat) {
           acc[stat.feed_id] = stat;
@@ -835,6 +835,24 @@ var vm = new Vue({
         var target = handle && handle.parentElement;
 
         if (target && scroll) scrollto(target, scroll);
+      });
+    },
+    stopRefresh: function() {
+      console.log("Refresh stop requested");
+      
+      // Call the API to stop the server-side refresh
+      api.feeds.stop_refresh().then(function() {
+        // Reset the counter of feeds being refreshed
+        vm.loading.feeds = 0;
+        
+        // Stop the automatic refresh loop
+        if (window._refreshStatsTimeout) {
+          clearTimeout(window._refreshStatsTimeout);
+          window._refreshStatsTimeout = null;
+        }
+        
+        // Refresh statistics to update the interface
+        vm.refreshStats(false);
       });
     }
   }

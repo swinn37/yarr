@@ -49,6 +49,9 @@
       refresh: function() {
         return api('post', './api/feeds/refresh')
       },
+      stop_refresh: function() {
+        return api('post', './api/feeds/stoprefresh')
+      },
       list_errors: function() {
         return api('get', './api/feeds/errors').then(json)
       },

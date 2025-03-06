@@ -107,6 +107,16 @@ func (w *Worker) RefreshFeeds() {
 	go w.refresher(feeds)
 }
 
+func (w *Worker) StopRefresh() {
+	w.reflock.Lock()
+	defer w.reflock.Unlock()
+
+	if *w.pending > 0 {
+		log.Print("Stopping refresh in progress")
+		atomic.StoreInt32(w.pending, 0)
+	}
+}
+
 func (w *Worker) refresher(feeds []storage.Feed) {
 	w.db.ResetFeedErrors()
 

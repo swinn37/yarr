@@ -29,7 +29,7 @@ func (c *Client) getConditional(url, lastModified, etag string) (*http.Response,
 		req.Header.Set("If-None-Match", etag)
 	}
 	
-	// Implémentation d'une logique de retry pour les erreurs DNS
+	// Implementation of a retry logic for DNS errors
 	var resp *http.Response
 	var lastErr error
 	maxRetries := 3
@@ -41,29 +41,29 @@ func (c *Client) getConditional(url, lastModified, etag string) (*http.Response,
 			return resp, nil
 		}
 		
-		// Vérifier si l'erreur est liée à DNS ou à la connexion réseau
+		// Check if the error is related to DNS or network connection
 		if netErr, ok := lastErr.(net.Error); ok && (netErr.Timeout() || netErr.Temporary()) {
-			// Attendre avant de réessayer
+			// Wait before retrying
 			time.Sleep(retryDelay)
-			// Augmenter le délai pour la prochaine tentative (backoff exponentiel)
+			// Increase delay for the next attempt (exponential backoff)
 			retryDelay *= 2
 			continue
 		}
 		
-		// Vérifier spécifiquement les erreurs DNS comme "server misbehaving"
+		// Specifically check for DNS errors like "server misbehaving"
 		errStr := lastErr.Error()
 		if strings.Contains(errStr, "dial tcp") && 
 		   (strings.Contains(errStr, "lookup") || 
 		    strings.Contains(errStr, "server misbehaving") || 
 		    strings.Contains(errStr, "no such host") || 
 		    strings.Contains(errStr, "i/o timeout")) {
-			// C'est probablement une erreur DNS, réessayer
+			// This is probably a DNS error, retry
 			time.Sleep(retryDelay)
 			retryDelay *= 2
 			continue
 		}
 		
-		// Si ce n'est pas une erreur réseau temporaire, ne pas réessayer
+		// If it's not a temporary network error, don't retry
 		return nil, lastErr
 	}
 	
@@ -80,9 +80,9 @@ func init() {
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		DialContext: (&net.Dialer{
-			Timeout:   30 * time.Second, // Augmentation du timeout DNS de 10 à 30 secondes
+			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
-			DualStack: true,             // Activer IPv4 et IPv6
+			DualStack: true,             // Enable both IPv4 and IPv6
 		}).DialContext,
 		DisableKeepAlives:     true,
 		TLSHandshakeTimeout:   time.Second * 20,
@@ -92,7 +92,7 @@ func init() {
 		MaxIdleConnsPerHost:   10,
 	}
 	httpClient := &http.Client{
-		Timeout:   time.Second * 60, // Augmentation du timeout global de 30 à 60 secondes
+		Timeout:   time.Second * 60,
 		Transport: transport,
 	}
 	client = &Client{

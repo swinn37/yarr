@@ -178,6 +178,11 @@
             <div class="p-2 toolbar d-flex align-items-center border-top flex-shrink-0" v-if="loading.feeds">
                 <span class="icon loading mx-2"></span>
                 <span class="text-truncate cursor-default noselect">Refreshing ({{ loading.feeds }} left)</span>
+                <button class="toolbar-item ml-2"
+                        title="Stop Refresh"
+                        @click="stopRefresh()">
+                    <span class="icon">{% inline "x.svg" %}</span>
+                </button>
             </div>
         </div>
         <!-- item list -->

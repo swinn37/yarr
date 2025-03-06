@@ -48,6 +48,7 @@ func (s *Server) handler() http.Handler {
 	r.For("/api/folders/:id", s.handleFolder)
 	r.For("/api/feeds", s.handleFeedList)
 	r.For("/api/feeds/refresh", s.handleFeedRefresh)
+	r.For("/api/feeds/stoprefresh", s.handleFeedStopRefresh)
 	r.For("/api/feeds/errors", s.handleFeedErrors)
 	r.For("/api/feeds/:id/icon", s.handleFeedIcon)
 	r.For("/api/feeds/:id", s.handleFeed)
@@ -156,6 +157,15 @@ func (s *Server) handleFolder(c *router.Context) {
 func (s *Server) handleFeedRefresh(c *router.Context) {
 	if c.Req.Method == "POST" {
 		s.worker.RefreshFeeds()
+		c.Out.WriteHeader(http.StatusOK)
+	} else {
+		c.Out.WriteHeader(http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleFeedStopRefresh(c *router.Context) {
+	if c.Req.Method == "POST" {
+		s.worker.StopRefresh()
 		c.Out.WriteHeader(http.StatusOK)
 	} else {
 		c.Out.WriteHeader(http.StatusMethodNotAllowed)
