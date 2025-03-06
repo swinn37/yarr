@@ -241,7 +241,6 @@ function dateRepr(d) {
   sec = Math.abs(sec);
   out = d.toLocaleDateString(undefined, {year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric"});
 
-  if (neg) return '-' + out;
   return out;
 }
 

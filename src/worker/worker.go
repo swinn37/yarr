@@ -25,7 +25,13 @@ func NewWorker(db *storage.Storage) *Worker {
 }
 
 func (w *Worker) FeedsPending() int32 {
-	return *w.pending
+	// Ensure we never return a negative value
+	pending := atomic.LoadInt32(w.pending)
+	if pending < 0 {
+		atomic.StoreInt32(w.pending, 0)
+		return 0
+	}
+	return pending
 }
 
 func (w *Worker) StartFeedCleaner() {
@@ -136,12 +142,20 @@ func (w *Worker) refresher(feeds []storage.Feed) {
 			w.db.CreateItems(items)
 			w.db.SetFeedSize(items[0].FeedId, len(items))
 		}
-		atomic.AddInt32(w.pending, -1)
+		
+		// Ensure pending never goes below 0
+		current := atomic.LoadInt32(w.pending)
+		if current > 0 {
+			atomic.AddInt32(w.pending, -1)
+		}
+		
 		w.db.SyncSearch()
 	}
 	close(srcqueue)
 	close(dstqueue)
 
+	// Ensure pending is exactly 0 when finished
+	atomic.StoreInt32(w.pending, 0)
 	log.Printf("Finished refreshing %d feeds", len(feeds))
 }
 
