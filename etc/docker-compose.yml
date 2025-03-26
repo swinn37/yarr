@@ -12,6 +12,9 @@ services:
       - TZ=Europe/Paris
 #       - YARR_LOGFILE=/data/yarr.log # Set a custom log file
 #       - YARR_AUTH=user:password  # Set a username and password for basic authentication
+#    dns:
+#      - 8.8.8.8
+#      - 1.1.1.1
     volumes:
       - ${YARR_DATA_DIR:-/volume1/docker/yarr/}:/data/
     restart: unless-stopped

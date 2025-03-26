@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"context"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -9,7 +10,8 @@ import (
 	"github.com/nkanaev/yarr/src/storage"
 )
 
-const NUM_WORKERS = 4
+// Increase the number of workers based on available CPU cores
+var NUM_WORKERS = 4
 
 type Worker struct {
 	db      *storage.Storage
@@ -54,7 +56,11 @@ func (w *Worker) FindFavicons() {
 }
 
 func (w *Worker) FindFeedFavicon(feed storage.Feed) {
-	icon, err := findFavicon(feed.Link, feed.FeedLink)
+	// Create a context with a reasonable timeout for favicon fetching
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	icon, err := findFaviconWithContext(ctx, feed.Link, feed.FeedLink)
 	if err != nil {
 		log.Printf("Failed to find favicon for %s (%s): %s", feed.FeedLink, feed.Link, err)
 	}
@@ -126,37 +132,76 @@ func (w *Worker) StopRefresh() {
 func (w *Worker) refresher(feeds []storage.Feed) {
 	w.db.ResetFeedErrors()
 
+	// Create buffered channels for better throughput
 	srcqueue := make(chan storage.Feed, len(feeds))
-	dstqueue := make(chan []storage.Item)
+	dstqueue := make(chan []storage.Item, NUM_WORKERS)
 
+	// Use a WaitGroup to manage worker goroutines
+	var wg sync.WaitGroup
+
+	// Start workers
 	for i := 0; i < NUM_WORKERS; i++ {
-		go w.worker(srcqueue, dstqueue)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			w.worker(srcqueue, dstqueue)
+		}()
 	}
 
+	// Queue all feeds for processing
 	for _, feed := range feeds {
 		srcqueue <- feed
 	}
-	for i := 0; i < len(feeds); i++ {
-		items := <-dstqueue
+	// Close the source queue to signal no more feeds
+	close(srcqueue)
+
+	// Start a goroutine to close the destination queue when all workers are done
+	go func() {
+		wg.Wait()
+		close(dstqueue)
+	}()
+
+	// Process results as they come in
+	for items := range dstqueue {
 		if len(items) > 0 {
 			w.db.CreateItems(items)
-			w.db.SetFeedSize(items[0].FeedId, len(items))
 		}
-		
+
+		// Update progress counter
 		// Ensure pending never goes below 0
 		current := atomic.LoadInt32(w.pending)
 		if current > 0 {
 			atomic.AddInt32(w.pending, -1)
 		}
-		
-		w.db.SyncSearch()
 	}
-	close(srcqueue)
-	close(dstqueue)
+
+	// Final sync
+	w.db.SyncSearch()
 
 	// Ensure pending is exactly 0 when finished
 	atomic.StoreInt32(w.pending, 0)
 	log.Printf("Finished refreshing %d feeds", len(feeds))
+
+	// Add debug output for failed feeds
+	feedErrors := w.db.GetFeedErrors()
+	if len(feedErrors) > 0 {
+		log.Printf("Failed to refresh %d feeds:", len(feedErrors))
+
+		// Create a map of feed IDs to feed titles for easier lookup
+		feedTitles := make(map[int64]string)
+		for _, feed := range feeds {
+			feedTitles[feed.Id] = feed.Title
+		}
+
+		// Log each failed feed with its title and error message
+		for feedId, errMsg := range feedErrors {
+			title := feedTitles[feedId]
+			if title == "" {
+				title = "<unknown>"
+			}
+			log.Printf("  - %s (ID: %d): %s", title, feedId, errMsg)
+		}
+	}
 }
 
 func (w *Worker) worker(srcqueue <-chan storage.Feed, dstqueue chan<- []storage.Item) {
@@ -165,6 +210,11 @@ func (w *Worker) worker(srcqueue <-chan storage.Feed, dstqueue chan<- []storage.
 		if err != nil {
 			w.db.SetFeedError(feed.Id, err)
 		}
-		dstqueue <- items
+		if items != nil {
+			dstqueue <- items
+		} else {
+			// Send empty slice to maintain feed count
+			dstqueue <- []storage.Item{}
+		}
 	}
 }
