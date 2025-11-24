@@ -1,6 +1,77 @@
 'use strict';
 
-var TITLE = document.title
+var TITLE = document.title;
+
+// Add middle-click handler for opening links in new tabs
+document.addEventListener('mousedown', function(e) {
+  if (e.button === 1) { // Middle mouse button
+    // Immediately prevent the default browser behavior for middle-click (auto-scroll)
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // First check for direct links
+    let target = e.target.closest('a');
+    if (target && target.href) {
+      
+      // Check if it's the "Open Link" icon in the toolbar
+      if (target.classList.contains('toolbar-item') && target.title === "Open Link") {
+        // For the "Open Link" icon, let the browser handle the opening
+        return;
+      }
+      
+      // For other links, open manually
+      window.open(target.href, '_blank');
+      
+      // Check if this is an article link in the content area
+      if (vm.itemSelectedDetails && target.href === vm.itemSelectedDetails.link) {
+        return; // Link is already marked as read since it's the selected item
+      }
+      
+      // Check if this link matches any item in the list
+      let matchingItem = vm.items.find(function(i) { 
+        return i.link === target.href && i.status === 'unread';
+      });
+      
+      if (matchingItem) {
+        // Mark the item as read
+        api.items.update(matchingItem.id, {status: 'read'}).then(function() {
+          vm.feedStats[matchingItem.feed_id].unread -= 1;
+          matchingItem.status = 'read';
+        });
+      }
+      
+      return;
+    }
+
+    // Then check for item list entries
+    let itemElement = e.target.closest('.selectgroup');
+    if (itemElement) {
+      // Prevent the default browser behavior for middle-click
+      e.stopPropagation();
+      
+      let input = itemElement.querySelector('input[name="item"]');
+      if (input && input.value) {
+        let itemId = input.value;
+        let item = vm.items.find(function(i) { return i.id == itemId; });
+        if (item) {
+          api.items.get(itemId).then(function(fullItem) {
+            if (fullItem && fullItem.link) {
+              window.open(fullItem.link, '_blank');
+              
+              // Mark the item as read if it's unread
+              if (fullItem.status === 'unread') {
+                api.items.update(fullItem.id, {status: 'read'}).then(function() {
+                  vm.feedStats[fullItem.feed_id].unread -= 1;
+                  item.status = 'read';
+                });
+              }
+            }
+          });
+        }
+      }
+    }
+  }
+});
 
 function scrollto(target, scroll) {
   var padding = 10
@@ -168,20 +239,11 @@ function dateRepr(d) {
   var out = ''
 
   sec = Math.abs(sec)
-  if (sec < 2700)  // less than 45 minutes
-    out = Math.round(sec / 60) + 'm'
-  else if (sec < 86400)  // less than 24 hours
-    out = Math.round(sec / 3600) + 'h'
-  else if (sec < 604800)  // less than a week
-    out = Math.round(sec / 86400) + 'd'
-  else
-    out = d.toLocaleDateString(undefined, {year: "numeric", month: "long", day: "numeric"})
-
-  if (neg) return '-' + out
+  out = d.toLocaleDateString(undefined, {year: "numeric", month: "numeric", day: "numeric", hour: "numeric", minute: "numeric", second: "numeric"})
   return out
 }
 
-Vue.component('relative-time', {
+Vue.component('formatted-date', {
   props: ['val'],
   data: function() {
     var d = new Date(this.val)
@@ -421,7 +483,7 @@ var vm = new Vue({
 
         vm.loading.feeds = data.running
         if (data.running) {
-          setTimeout(vm.refreshStats.bind(vm, true), 500)
+          window._refreshStatsTimeout = setTimeout(vm.refreshStats.bind(vm, true), 500)
         }
         vm.feedStats = data.stats.reduce(function(acc, stat) {
           acc[stat.feed_id] = stat
@@ -464,7 +526,8 @@ var vm = new Vue({
           vm.feeds = values[1]
         })
     },
-    refreshItems: function(loadMore = false) {
+    refreshItems: function(loadMore) {
+      if (loadMore === undefined) loadMore = false
       if (this.feedSelected === null) {
         vm.items = []
         vm.itemsHasMore = false
@@ -698,10 +761,10 @@ var vm = new Vue({
       }
     },
     resizeFeedList: function(width) {
-      this.feedListWidth = Math.min(Math.max(200, width), 700)
+      this.feedListWidth = Math.min(Math.max(250, width), 500)
     },
     resizeItemList: function(width) {
-      this.itemListWidth = Math.min(Math.max(200, width), 700)
+      this.itemListWidth = Math.min(Math.max(600, width), 900)
     },
     resetFeedChoice: function() {
       this.feedNewChoice = []
@@ -740,13 +803,24 @@ var vm = new Vue({
         statsTotal += n
       }
 
-      this.filteredFeedStats = statsFeeds
-      this.filteredFolderStats = statsFolders
-      this.filteredTotalStats = statsTotal
+      this.filteredFeedStats = statsFeeds;
+      this.filteredFolderStats = statsFolders;
+      this.filteredTotalStats = statsTotal;
+    },
+    setDefaultIcon: function(event) {
+      const svgString = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="orange" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-rss">
+          <path d="M4 11a9 9 0 0 1 9 9"></path>
+          <path d="M4 4a16 16 0 0 1 16 16"></path>
+          <circle cx="5" cy="19" r="1"></circle>
+        </svg>
+      `;
+      const encodedSvg = encodeURIComponent(svgString);
+      event.target.src = `data:image/svg+xml,${encodedSvg}`;
     },
     // navigation helper, navigate relative to selected item
     navigateToItem: function(relativePosition) {
-      let vm = this
+      var vm = this
       if (vm.itemSelected == null) {
         // if no item is selected, select first
         if (vm.items.length !== 0) vm.itemSelected = vm.items[0].id
@@ -777,7 +851,7 @@ var vm = new Vue({
     },
     // navigation helper, navigate relative to selected feed
     navigateToFeed: function(relativePosition) {
-      let vm = this
+      var vm = this
       const navigationList = this.foldersWithFeeds
         .filter(folder => !folder.id || !vm.mustHideFolder(folder))
         .map((folder) => {
@@ -812,6 +886,25 @@ var vm = new Vue({
         if (target && scroll) scrollto(target, scroll)
       })
     },
+    stopRefresh: function() {
+      console.log("Refresh stop requested");
+      
+      // Call the API to stop the server-side refresh
+      api.feeds.stop_refresh().then(function() {
+        // Reset the counter of feeds being refreshed
+        vm.loading.feeds = 0
+        
+        // Stop the automatic refresh loop
+        if (window._refreshStatsTimeout) {
+          clearTimeout(window._refreshStatsTimeout);
+          window._refreshStatsTimeout = null;
+        }
+
+        // Refresh statistics to update the interface
+        vm.refreshStats(false);
+      })
+    }
+
     changeRefreshRate: function(offset) {
       const curIdx = this.refreshRateOptions.findIndex(o => o.value === this.refreshRate)
       if (curIdx <= 0 && offset < 0) return
@@ -831,6 +924,6 @@ var vm = new Vue({
         && (!this.itemSelectedDetails || this.itemSelectedDetails.feed_id != feed.id)
     },
   }
-})
+});
 
-vm.$mount('#app')
+vm.$mount('#app');

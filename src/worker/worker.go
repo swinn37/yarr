@@ -107,40 +107,96 @@ func (w *Worker) RefreshFeeds() {
 	go w.refresher(feeds)
 }
 
+func (w *Worker) StopRefresh() {
+	w.reflock.Lock()
+	defer w.reflock.Unlock()
+
+	if *w.pending > 0 {
+		log.Print("Stopping refresh in progress")
+		// Set pending to 0 to signal workers to stop
+		atomic.StoreInt32(w.pending, 0)
+	}
+}
+
 func (w *Worker) refresher(feeds []storage.Feed) {
 	w.db.ResetFeedErrors()
 
 	srcqueue := make(chan storage.Feed, len(feeds))
 	dstqueue := make(chan []storage.Item)
 
+	// Track how many feeds were actually sent to workers
+	sentFeeds := 0
+
 	for i := 0; i < NUM_WORKERS; i++ {
 		go w.worker(srcqueue, dstqueue)
 	}
 
+	// Send feeds to workers
 	for _, feed := range feeds {
+		// Check if refresh was stopped
+		if *w.pending == 0 {
+			break
+		}
 		srcqueue <- feed
+		sentFeeds++
 	}
-	for i := 0; i < len(feeds); i++ {
+
+	// Process results from workers
+	processedCount := 0
+
+	for i := 0; i < sentFeeds; i++ {
+		// Check if refresh was stopped
+		if *w.pending == 0 {
+			// Drain any remaining responses without processing them
+			for j := i; j < sentFeeds; j++ {
+				<-dstqueue
+			}
+			break
+		}
 		items := <-dstqueue
 		if len(items) > 0 {
 			w.db.CreateItems(items)
 			w.db.SetFeedSize(items[0].FeedId, len(items))
 		}
-		atomic.AddInt32(w.pending, -1)
+		// Only decrement if we're still refreshing
+		if *w.pending > 0 {
+			atomic.AddInt32(w.pending, -1)
+		}
 		w.db.SyncSearch()
+		processedCount++
 	}
+
+	// Close channels
 	close(srcqueue)
 	close(dstqueue)
 
-	log.Printf("Finished refreshing %d feeds", len(feeds))
+	if *w.pending == 0 {
+		log.Printf("Refresh stopped after processing %d feeds", processedCount)
+	} else {
+		log.Printf("Finished refreshing %d feeds", processedCount)
+	}
 }
 
 func (w *Worker) worker(srcqueue <-chan storage.Feed, dstqueue chan<- []storage.Item) {
 	for feed := range srcqueue {
+		// Check if refresh was stopped
+		if *w.pending == 0 {
+			// Send empty items to unblock the main refresher loop
+			dstqueue <- []storage.Item{}
+			continue
+		}
+
+		// Process the feed only if refresh is still active
 		items, err := listItems(feed, w.db)
 		if err != nil {
 			w.db.SetFeedError(feed.Id, err)
 		}
-		dstqueue <- items
+
+		// Check again if refresh was stopped while processing this feed
+		if *w.pending == 0 {
+			dstqueue <- []storage.Item{}
+		} else {
+			dstqueue <- items
+		}
 	}
 }
