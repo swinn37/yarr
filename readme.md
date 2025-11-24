@@ -34,6 +34,28 @@ See more:
 * [Building from source code](doc/build.md)
 * [Fever API support](doc/fever.md)
 
+## Modifications in this fork
+
+This fork includes several improvements and customizations:
+
+### UI/UX Enhancements
+- **Grey Theme**: Added a new grey theme option replacing the sepia theme
+- **Item List Display**: Improved styling and layout for better readability
+- **Feed Icons**: Display feed icons in the item list with fallback for missing icons
+- **Date Display**: Replaced relative time with formatted date display
+- **Middle-click Support**: Added ability to open items in new tabs with middle-click
+
+### Feed Management
+- **Manual Refresh Control**: Added manual refresh button and ability to stop ongoing refresh operations
+- **Responsive Layout**: Adjusted default layout constraints for better responsiveness across devices
+
+### Configuration Changes
+- **Default Port**: Changed default server port from 7070 to 7777 for better port allocation flexibility
+- **UI Defaults**: Updated default UI layout and theme settings
+
+### Docker Support
+- **Docker Compose**: Added docker-compose configuration for easier deployment
+
 ## credits
 
 [Feather](http://feathericons.com/) for icons.
