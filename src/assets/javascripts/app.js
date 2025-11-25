@@ -903,8 +903,7 @@ var vm = new Vue({
         // Refresh statistics to update the interface
         vm.refreshStats(false);
       })
-    }
-
+    },
     changeRefreshRate: function(offset) {
       const curIdx = this.refreshRateOptions.findIndex(o => o.value === this.refreshRate)
       if (curIdx <= 0 && offset < 0) return
